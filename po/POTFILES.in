@@ -1,0 +1,6 @@
+# List of source files containing translatable strings.
+# Please keep this file sorted alphabetically.
+data/com.zzm.Zdownload.desktop.in
+data/com.zzm.Zdownload.metainfo.xml.in
+data/com.zzm.Zdownload.gschema.xml
+src/window.ui

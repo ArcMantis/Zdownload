@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=zdownload
+Exec=zdownload
+Icon=com.zzm.Zdownload
+Terminal=false
+Type=Application
+Categories=Utility;
+Keywords=GTK;
+StartupNotify=true
+DBusActivatable=true

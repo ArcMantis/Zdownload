@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<interface>
+  <requires lib="gtk" version="4.0"/>
+  <requires lib="adw" version="1.0"/>
+  <template class="ZdownloadWindow" parent="AdwApplicationWindow">
+    <property name="title" translatable="yes">Zdownload</property>
+    <property name="default-width">800</property>
+    <property name="default-height">600</property>
+    <property name="content">
+      <object class="AdwToolbarView">
+        <child type="top">
+          <object class="AdwHeaderBar"/>
+        </child>
+        <property name="content">
+          <object class="GtkBox">
+            <property name="orientation">vertical</property>
+            <property name="spacing">24</property>
+            <property name="margin-top">32</property>
+            <property name="margin-bottom">32</property>
+            <property name="margin-start">32</property>
+            <property name="margin-end">32</property>
+
+            <child>
+              <object class="AdwPreferencesGroup">
+                <property name="title" translatable="yes">下载任务配置</property>
+                <child>
+                  <object class="AdwEntryRow" id="url_entry">
+                    <property name="title" translatable="yes">视频链接 (URL)</property>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="clear_url_button">
+                    <property name="label">清除链接</property>
+                    <property name="visible">false</property>
+                    <style>
+                      <class name="flat"/>
+                    </style>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwActionRow" id="cookie_row">
+                    <property name="title" translatable="yes">浏览器 Cookies</property>
+                    <property name="subtitle" translatable="yes">请选择 .txt 格式的 cookies 文件</property>
+                    <child>
+                      <object class="GtkBox">
+                        <property name="spacing">6</property>
+                        <property name="valign">center</property>
+                        <child>
+                          <object class="GtkButton" id="cookie_button">
+                            <property name="label" translatable="yes">选择文件</property>
+                          </object>
+                        </child>
+                        <child>
+                          <object class="GtkButton" id="clear_cookie_button">
+                            <property name="icon-name">edit-clear-all-symbolic</property>
+                            <property name="visible">false</property>
+                            <style>
+                              <class name="flat"/>
+                            </style>
+                          </object>
+                        </child>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+
+                <child>
+                  <object class="AdwComboRow" id="quality_combo">
+                    <property name="title" translatable="yes">优先画质</property>
+                    <property name="model">
+                      <object class="GtkStringList">
+                        <items>
+                          <item translatable="yes">4K (2160p)</item>
+                          <item translatable="yes">1080p (Full HD)</item>
+                          <item translatable="yes">720p (HD)</item>
+                          <item translatable="yes">480p</item>
+                        </items>
+                      </object>
+                    </property>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="halign">center</property>
+                <property name="spacing">12</property>
+                <child>
+                  <object class="GtkButton" id="download_button">
+                    <property name="label" translatable="yes">立即下载</property>
+                    <style>
+                      <class name="suggested-action"/>
+                      <class name="pill"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkButton" id="cancel_button">
+                    <property name="label" translatable="yes">取消</property>
+                    <style>
+                      <class name="pill"/>
+                    </style>
+                  </object>
+                </child>
+              </object>
+            </child>
+
+            <child>
+              <object class="GtkBox">
+                <property name="orientation">vertical</property>
+                <property name="spacing">8</property>
+                <property name="vexpand">true</property>
+                <child>
+                  <object class="GtkLabel">
+                    <property name="label" translatable="yes">执行日志</property>
+                    <property name="halign">start</property>
+                    <style>
+                      <class name="caption"/>
+                    </style>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkScrolledWindow">
+                    <property name="hscrollbar-policy">never</property>
+                    <property name="min-content-height">150</property>
+                    <property name="vexpand">true</property>
+                    <style>
+                      <class name="card"/>
+                    </style>
+                    <child>
+                      <object class="GtkTextView" id="log_view">
+                        <property name="editable">false</property>
+                        <property name="cursor-visible">false</property>
+                        <property name="wrap-mode">word</property>
+                        <property name="monospace">true</property>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+          </object>
+        </property>
+      </object>
+    </property>
+  </template>
+</interface>
