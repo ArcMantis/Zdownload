@@ -1,7 +1,7 @@
 {
     "id" : "com.zzm.Zdownload",
     "runtime" : "org.gnome.Platform",
-    "runtime-version" : "master",
+    "runtime-version" : "49",
     "sdk" : "org.gnome.Sdk",
     "sdk-extensions" : [
         "org.freedesktop.Sdk.Extension.rust-stable"
@@ -43,8 +43,8 @@
             "buildsystem" : "meson",
             "sources" : [
                 {
-                    "type" : "git",
-                    "url" : "file:///home/zane/Projects"
+                    "type": "dir",
+          	    "path": "./"
                 }
             ]
         }
