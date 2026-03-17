@@ -43,7 +43,7 @@
 
                 <child>
                   <object class="AdwActionRow" id="cookie_row">
-                    <property name="title" translatable="yes">浏览器 Cookies</property>
+                    <property name="title" translatable="yes">浏览器 Cookies (可选)</property>
                     <property name="subtitle" translatable="yes">请选择 .txt 格式的 cookies 文件</property>
                     <child>
                       <object class="GtkBox">
