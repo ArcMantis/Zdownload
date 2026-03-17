@@ -2,10 +2,10 @@ use gtk::prelude::*;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib, CompositeTemplate};
-use std::process::{Command, Stdio};
+use std::process::{Command, Stdio, Child};
 use std::io::{BufRead, BufReader};
 use std::thread;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
@@ -33,6 +33,9 @@ mod imp {
         pub cancel_button: TemplateChild<gtk::Button>,
         #[template_child]
         pub log_view: TemplateChild<gtk::TextView>,
+
+        // 线程安全地持有当前正在运行的下载进程
+        pub current_process: Arc<Mutex<Option<Child>>>,
     }
 
     #[glib::object_subclass]
@@ -81,17 +84,25 @@ impl ZdownloadWindow {
         let window = self;
         let default_cookie_hint = "请选择 .txt 格式的 cookies 文件";
 
-        // URL 输入监听
+        // 初始化 UI 状态
+        imp.cancel_button.set_label("取消下载");
+
+        // --- 1. URL 输入框交互逻辑 ---
         imp.url_entry.connect_changed(glib::clone!(
             #[weak] imp, move |entry| {
+                // 只有当有内容时才显示清空按钮
                 imp.clear_url_button.set_visible(!entry.text().is_empty());
             }
         ));
 
         imp.clear_url_button.connect_clicked(glib::clone!(
-            #[weak] imp, move |_| { imp.url_entry.set_text(""); }
+            #[weak] imp, move |_| {
+                imp.url_entry.set_text("");
+                imp.url_entry.grab_focus(); // 清空后自动聚焦，方便重新粘贴
+            }
         ));
 
+        // --- 2. Cookies 选择与重置逻辑 ---
         imp.cookie_button.connect_clicked(glib::clone!(
             #[weak] window, move |_| window.select_cookies_file()
         ));
@@ -104,6 +115,7 @@ impl ZdownloadWindow {
             }
         ));
 
+        // --- 3. 下载按钮逻辑 ---
         imp.download_button.connect_clicked(glib::clone!(
             #[weak] window, move |_| {
                 let url = window.imp().url_entry.text().to_string();
@@ -118,7 +130,9 @@ impl ZdownloadWindow {
 
                 let (tx, rx) = mpsc::channel::<String>();
                 let window_weak = window.downgrade();
+                let process_arc = window.imp().current_process.clone();
 
+                // UI 刷新计时器
                 glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
                     let window_ref = match window_weak.upgrade() {
                         Some(w) => w,
@@ -127,7 +141,8 @@ impl ZdownloadWindow {
 
                     while let Ok(msg) = rx.try_recv() {
                         window_ref.append_log(&msg);
-                        if msg.contains("✅") || msg.contains("❌") {
+                        // 结束信号判定
+                        if msg.contains("✅") || msg.contains("❌") || msg.contains("🛑") {
                             window_ref.imp().download_button.set_sensitive(true);
                             return glib::ControlFlow::Break;
                         }
@@ -135,30 +150,25 @@ impl ZdownloadWindow {
                     glib::ControlFlow::Continue
                 });
 
+                // 下载线程
                 thread::spawn(move || {
                     let mut bin_dir = glib::user_data_dir();
                     bin_dir.push("zdownload");
                     if !bin_dir.exists() { let _ = fs::create_dir_all(&bin_dir); }
                     let yt_dlp_path = bin_dir.join("yt-dlp");
 
+                    // 维护 yt-dlp 组件
                     if !yt_dlp_path.exists() {
                         let _ = tx.send("组件不存在，正在下载 yt-dlp...".to_string());
                         let status = Command::new("curl")
                             .args(&["-L", "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp", "-o", yt_dlp_path.to_str().unwrap()])
                             .status();
 
-                        // 修复此处的 let chains 错误
-                        let download_success = if let Ok(s) = status {
-                            s.success()
-                        } else {
-                            false
-                        };
-
+                        let download_success = if let Ok(s) = status { s.success() } else { false };
                         if download_success {
                             let _ = fs::set_permissions(&yt_dlp_path, fs::Permissions::from_mode(0o755));
-                            let _ = tx.send("组件准备就绪。".to_string());
                         } else {
-                            let _ = tx.send("❌ 无法下载组件，请检查网络。".to_string());
+                            let _ = tx.send("❌ 无法下载组件。".to_string());
                             return;
                         }
                     }
@@ -180,36 +190,63 @@ impl ZdownloadWindow {
                     }
 
                     let mut cmd = Command::new(&yt_dlp_path);
-                    cmd.args(&args)
-                       .stdout(Stdio::piped())
-                       .stderr(Stdio::piped());
+                    cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
-                    if let Ok(mut child) = cmd.spawn() {
-                        let stdout = child.stdout.take().unwrap();
-                        let reader = BufReader::new(stdout);
+                    if let Ok(child) = cmd.spawn() {
+                        // 记录进程句柄以便取消
+                        {
+                            let mut lock = process_arc.lock().unwrap();
+                            *lock = Some(child);
+                        }
 
-                        for line in reader.lines() {
-                            if let Ok(l) = line {
-                                if !l.trim().is_empty() {
-                                    let _ = tx.send(l);
+                        // 从 Mutex 中临时取出 stdout 进行读取
+                        let stdout = {
+                            let mut lock = process_arc.lock().unwrap();
+                            lock.as_mut().and_then(|c| c.stdout.take())
+                        };
+
+                        if let Some(out) = stdout {
+                            let reader = BufReader::new(out);
+                            for line in reader.lines() {
+                                if let Ok(l) = line {
+                                    if !l.trim().is_empty() { let _ = tx.send(l); }
                                 }
                             }
                         }
 
-                        let status = child.wait().unwrap();
-                        if status.success() {
-                            let _ = tx.send("✅ 任务已成功完成！".to_string());
-                        } else {
-                            let _ = tx.send("❌ 下载退出，请检查 URL 或 Cookie。".to_string());
+                        // 等待进程结束
+                        let mut lock = process_arc.lock().unwrap();
+                        if let Some(mut c) = lock.take() {
+                            let status = c.wait().unwrap();
+                            if status.success() {
+                                let _ = tx.send("✅ 任务已成功完成！".to_string());
+                            } else {
+                                let _ = tx.send("❌ 下载已停止或出错。".to_string());
+                            }
                         }
                     } else {
-                        let _ = tx.send("❌ 无法启动 yt-dlp 进程。".to_string());
+                        let _ = tx.send("❌ 无法启动下载进程。".to_string());
                     }
                 });
             }
         ));
 
-        imp.cancel_button.connect_clicked(glib::clone!(#[weak] window, move |_| window.close()));
+        // --- 4. 取消下载逻辑 ---
+        imp.cancel_button.connect_clicked(glib::clone!(#[weak] window, move |_| {
+            let mut lock = window.imp().current_process.lock().unwrap();
+            if let Some(mut child) = lock.take() {
+                match child.kill() {
+                    Ok(_) => {
+                        window.append_log("🛑 正在停止下载任务...");
+                    },
+                    Err(e) => {
+                        window.append_log(&format!("错误: 无法杀死进程 ({})", e));
+                    }
+                }
+            } else {
+                window.append_log("提示: 当前没有正在运行的任务。");
+            }
+        }));
     }
 
     pub fn append_log(&self, text: &str) {
@@ -223,10 +260,7 @@ impl ZdownloadWindow {
 
     fn select_cookies_file(&self) {
         let window = self;
-        let dialog = gtk::FileDialog::builder()
-            .title("选择 Cookies 文件")
-            .build();
-
+        let dialog = gtk::FileDialog::builder().title("选择 Cookies 文件").build();
         dialog.open(Some(self), gio::Cancellable::NONE, glib::clone!(#[weak] window, move |result| {
             if let Ok(file) = result {
                 if let Some(path) = file.path() {

@@ -23,18 +23,21 @@
             <child>
               <object class="AdwPreferencesGroup">
                 <property name="title" translatable="yes">下载任务配置</property>
+
                 <child>
                   <object class="AdwEntryRow" id="url_entry">
                     <property name="title" translatable="yes">视频链接 (URL)</property>
-                  </object>
-                </child>
-                <child>
-                  <object class="GtkButton" id="clear_url_button">
-                    <property name="label">清除链接</property>
-                    <property name="visible">false</property>
-                    <style>
-                      <class name="flat"/>
-                    </style>
+                    <child type="suffix">
+                      <object class="GtkButton" id="clear_url_button">
+                        <property name="icon-name">edit-clear-symbolic</property>
+                        <property name="valign">center</property>
+                        <property name="visible">false</property>
+                        <property name="tooltip-text" translatable="yes">清空链接</property>
+                        <style>
+                          <class name="flat"/>
+                        </style>
+                      </object>
+                    </child>
                   </object>
                 </child>
 
@@ -98,7 +101,7 @@
                 </child>
                 <child>
                   <object class="GtkButton" id="cancel_button">
-                    <property name="label" translatable="yes">取消</property>
+                    <property name="label" translatable="yes">取消下载</property>
                     <style>
                       <class name="pill"/>
                     </style>
