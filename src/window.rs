@@ -8,6 +8,7 @@ use std::thread;
 use std::sync::{mpsc, Arc, Mutex};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::path::PathBuf; // 新增：用于路径处理
 
 mod imp {
     use super::*;
@@ -79,6 +80,14 @@ impl ZdownloadWindow {
             .build()
     }
 
+    // 辅助函数：获取默认 Cookie 路径 (~/.config/Zdownload/cookies.txt)
+    fn get_default_cookie_path() -> PathBuf {
+        let mut path = glib::user_config_dir();
+        path.push("Zdownload");
+        path.push("cookies.txt");
+        path
+    }
+
     fn setup_callbacks(&self) {
         let imp = self.imp();
         let window = self;
@@ -87,10 +96,18 @@ impl ZdownloadWindow {
         // 初始化 UI 状态
         imp.cancel_button.set_label("取消下载");
 
+        // --- 0. 启动时自动检查默认 Cookies ---
+        let default_cookie = Self::get_default_cookie_path();
+        if default_cookie.exists() {
+            let path_str = default_cookie.display().to_string();
+            imp.cookie_row.set_subtitle(&path_str);
+            imp.clear_cookie_button.set_visible(true);
+            self.append_log(&format!("已自动加载默认 Cookies: {}", path_str));
+        }
+
         // --- 1. URL 输入框交互逻辑 ---
         imp.url_entry.connect_changed(glib::clone!(
             #[weak] imp, move |entry| {
-                // 只有当有内容时才显示清空按钮
                 imp.clear_url_button.set_visible(!entry.text().is_empty());
             }
         ));
@@ -98,7 +115,7 @@ impl ZdownloadWindow {
         imp.clear_url_button.connect_clicked(glib::clone!(
             #[weak] imp, move |_| {
                 imp.url_entry.set_text("");
-                imp.url_entry.grab_focus(); // 清空后自动聚焦，方便重新粘贴
+                imp.url_entry.grab_focus();
             }
         ));
 
@@ -111,7 +128,7 @@ impl ZdownloadWindow {
             #[weak] window, #[weak] imp, move |_| {
                 imp.cookie_row.set_subtitle(default_cookie_hint);
                 imp.clear_cookie_button.set_visible(false);
-                window.append_log("Cookie 路径已重置。");
+                window.append_log("Cookie 路径已从当前任务中移除。");
             }
         ));
 
@@ -124,6 +141,7 @@ impl ZdownloadWindow {
                     return;
                 }
 
+                // 此时 cookie_subtitle 可能是默认路径，也可能是用户选的路径
                 let cookie_subtitle = window.imp().cookie_row.subtitle().map(|s| s.to_string()).unwrap_or_default();
                 window.imp().download_button.set_sensitive(false);
                 window.append_log("--- 准备下载 ---");
@@ -132,7 +150,6 @@ impl ZdownloadWindow {
                 let window_weak = window.downgrade();
                 let process_arc = window.imp().current_process.clone();
 
-                // UI 刷新计时器
                 glib::timeout_add_local(std::time::Duration::from_millis(100), move || {
                     let window_ref = match window_weak.upgrade() {
                         Some(w) => w,
@@ -141,7 +158,6 @@ impl ZdownloadWindow {
 
                     while let Ok(msg) = rx.try_recv() {
                         window_ref.append_log(&msg);
-                        // 结束信号判定
                         if msg.contains("✅") || msg.contains("❌") || msg.contains("🛑") {
                             window_ref.imp().download_button.set_sensitive(true);
                             return glib::ControlFlow::Break;
@@ -150,14 +166,12 @@ impl ZdownloadWindow {
                     glib::ControlFlow::Continue
                 });
 
-                // 下载线程
                 thread::spawn(move || {
                     let mut bin_dir = glib::user_data_dir();
                     bin_dir.push("zdownload");
                     if !bin_dir.exists() { let _ = fs::create_dir_all(&bin_dir); }
                     let yt_dlp_path = bin_dir.join("yt-dlp");
 
-                    // 维护 yt-dlp 组件
                     if !yt_dlp_path.exists() {
                         let _ = tx.send("组件不存在，正在下载 yt-dlp...".to_string());
                         let status = Command::new("curl")
@@ -184,6 +198,7 @@ impl ZdownloadWindow {
                         url
                     ];
 
+                    // 逻辑：如果 Subtitle 不是提示词且不为空，则作为 --cookies 传入
                     if !cookie_subtitle.is_empty() && cookie_subtitle != default_cookie_hint {
                         args.push("--cookies".to_string());
                         args.push(cookie_subtitle);
@@ -193,13 +208,11 @@ impl ZdownloadWindow {
                     cmd.args(&args).stdout(Stdio::piped()).stderr(Stdio::piped());
 
                     if let Ok(child) = cmd.spawn() {
-                        // 记录进程句柄以便取消
                         {
                             let mut lock = process_arc.lock().unwrap();
                             *lock = Some(child);
                         }
 
-                        // 从 Mutex 中临时取出 stdout 进行读取
                         let stdout = {
                             let mut lock = process_arc.lock().unwrap();
                             lock.as_mut().and_then(|c| c.stdout.take())
@@ -214,7 +227,6 @@ impl ZdownloadWindow {
                             }
                         }
 
-                        // 等待进程结束
                         let mut lock = process_arc.lock().unwrap();
                         if let Some(mut c) = lock.take() {
                             let status = c.wait().unwrap();
@@ -236,12 +248,8 @@ impl ZdownloadWindow {
             let mut lock = window.imp().current_process.lock().unwrap();
             if let Some(mut child) = lock.take() {
                 match child.kill() {
-                    Ok(_) => {
-                        window.append_log("🛑 正在停止下载任务...");
-                    },
-                    Err(e) => {
-                        window.append_log(&format!("错误: 无法杀死进程 ({})", e));
-                    }
+                    Ok(_) => { window.append_log("🛑 正在停止下载任务..."); },
+                    Err(e) => { window.append_log(&format!("错误: 无法杀死进程 ({})", e)); }
                 }
             } else {
                 window.append_log("提示: 当前没有正在运行的任务。");
