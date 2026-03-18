@@ -1,3 +1,23 @@
+/*
+时间线 →
+─────────────────────────────────────────────────
+
+第一步：class_init
+    ↓
+第二步：instance_init（创建所有UI控件）
+    ↓
+第三步：属性设置（GLib内部）
+    ↓
+第四步：parent_constructed（父类初始化）
+    ↓
+第五步：setup_callbacks ← 你的代码在这里
+    ↓
+第六步：窗口显示
+    ↓
+第七步：用户点击按钮 → 触发回调
+*/
+
+use crate::config::VERSION;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib, CompositeTemplate};
@@ -10,8 +30,9 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::thread; // 新增：用于路径处理
 
 mod imp {
-    use super::*;
+    use super::*; //导入父类的全部内容
 
+    //自动实现某些trait 可以打印调试信息  可以创建默认值   可以从UI模板加载控件 /  指定模板路径
     #[derive(Debug, Default, CompositeTemplate)]
     #[template(resource = "/com/zzm/Zdownload/window.ui")]
     pub struct ZdownloadWindow {
@@ -88,9 +109,27 @@ impl ZdownloadWindow {
     }
 
     fn setup_callbacks(&self) {
-        let imp = self.imp();
-        let window = self;
+        let imp = self.imp(); //获取内部实现（可以访问所有UI控件）,在闭包中直接访问self会移动所有权，但我们需要多次使用
+
+        // --- 最终修复：直接获取 Display 且不使用 if let ---
+        let provider = gtk::CssProvider::new();
+        provider
+            .load_from_string("textview { font-family: 'Noto Sans CJK SC'; font-size: 12pt; }");
+
+        // 获取当前控件关联的 display
+        let display = imp.log_view.display();
+
+        // 直接应用到该 display 上
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &provider,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
+        // ----------------------------------------------
+
+        let window = self; //保存self的引用，方便在闭包中使用
         let default_cookie_hint = "请选择 .txt 格式的 cookies 文件";
+        self.append_log(&format!("Version: {}", VERSION));
 
         // 初始化 UI 状态
         imp.cancel_button.set_label("取消下载");
@@ -99,12 +138,12 @@ impl ZdownloadWindow {
         let default_cookie = Self::get_default_cookie_path();
         if default_cookie.exists() {
             let path_str = default_cookie.display().to_string();
-            imp.cookie_row.set_subtitle(&path_str);
+            imp.cookie_row.set_subtitle(&path_str); //pub cookie_row: TemplateChild<adw::ActionRow>,是一个显示标题和副标题的框框
             imp.clear_cookie_button.set_visible(true);
             self.append_log(&format!("已自动加载默认 Cookies: {}", path_str));
         } else {
             self.append_log(&format!(
-                "请把默认cookies放入到download目录然后手动选取,\n或者直接把cookies放到{}自动加载",
+                "请把默认cookies放入到下载目录然后手动选取,\n或者直接把cookies放到{}自动加载",
                 default_cookie.display().to_string()
             ));
         }

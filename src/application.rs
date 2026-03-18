@@ -18,12 +18,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-use gettextrs::gettext;
+//use gettextrs::gettext;
 use adw::prelude::*;
 use adw::subclass::prelude::*;
 use gtk::{gio, glib};
 
-use crate::config::VERSION;
+//use crate::config::VERSION;
 use crate::ZdownloadWindow;
 
 mod imp {
@@ -42,9 +42,9 @@ mod imp {
     impl ObjectImpl for ZdownloadApplication {
         fn constructed(&self) {
             self.parent_constructed();
-            let obj = self.obj();
-            obj.setup_gactions();
-            obj.set_accels_for_action("app.quit", &["<primary>q"]);
+            // let obj = self.obj();
+            // obj.setup_gactions();
+            // obj.set_accels_for_action("app.quit", &["<primary>q"]);//设置退出快捷键
         }
     }
 
@@ -85,29 +85,29 @@ impl ZdownloadApplication {
             .build()
     }
 
-    fn setup_gactions(&self) {
-        let quit_action = gio::ActionEntry::builder("quit")
-            .activate(move |app: &Self, _, _| app.quit())
-            .build();
-        let about_action = gio::ActionEntry::builder("about")
-            .activate(move |app: &Self, _, _| app.show_about())
-            .build();
-        self.add_action_entries([quit_action, about_action]);
-    }
+    // fn setup_gactions(&self) {
+    //     let quit_action = gio::ActionEntry::builder("quit")
+    //         .activate(move |app: &Self, _, _| app.quit())
+    //         .build();
+    //     let about_action = gio::ActionEntry::builder("about")
+    //         .activate(move |app: &Self, _, _| app.show_about())
+    //         .build();
+    //     self.add_action_entries([quit_action, about_action]);
+    // }
 
-    fn show_about(&self) {
-        let window = self.active_window().unwrap();
-        let about = adw::AboutDialog::builder()
-            .application_name("zdownload")
-            .application_icon("com.zzm.Zdownload")
-            .developer_name("zane")
-            .version(VERSION)
-            .developers(vec!["zane"])
+    // fn show_about(&self) {
+    //     let window = self.active_window().unwrap();
+    //     let about = adw::AboutDialog::builder()
+    //         .application_name("zdownload")
+    //         .application_icon("com.zzm.Zdownload")
+    //         .developer_name("zane")
+    //         .version(VERSION)
+    //         .developers(vec!["zane"])
             // Translators: Replace "translator-credits" with your name/username, and optionally an email or URL.
-            .translator_credits(&gettext("translator-credits"))
-            .copyright("© 2026 zane")
-            .build();
+    //         .translator_credits(&gettext("translator-credits"))
+    //         .copyright("© 2026 zane")
+    //         .build();
 
-        about.present(Some(&window));
-    }
+    //     about.present(Some(&window));
+    // }
 }
