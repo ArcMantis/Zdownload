@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug Zdownload",
+            "cargo": {
+                "args": ["build", "--bin=zdownloadwin"]
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}",
+            "terminal": "integrated",
+            "sourceLanguages": ["rust"]
+        }
+    ]
+}
