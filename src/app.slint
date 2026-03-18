@@ -14,7 +14,7 @@ export component MainWindow inherits Window {
     in-out property <int> selected-quality-idx: 1; 
     in-out property <bool> downloading: false;
 
-    // --- 回调 ---
+    // --- 回调接口 ---
     callback download-clicked();
     callback cancel-clicked();
     callback select-cookie-clicked();
@@ -27,10 +27,13 @@ export component MainWindow inherits Window {
         padding: 24px;
         spacing: 20px;
 
+        // 1. 下载配置组 - vertical-stretch: 0 确保拉伸窗口时它不会变高
         GroupBox {
             title: "下载任务配置";
+            vertical-stretch: 0;
             VerticalBox {
-                spacing: 12px;
+                spacing: 10px;
+                padding: 5px;
                 
                 // URL 栏
                 HorizontalBox {
@@ -40,10 +43,11 @@ export component MainWindow inherits Window {
                         text <=> root.url;
                         placeholder-text: "粘贴视频地址";
                         enabled: !root.downloading;
+                        height: 35px;
                     }
-                    // 只有有内容时才显示清除按钮，且下载中禁用
                     if (root.url != "") : Button {
-                        text: "清除";
+                        text: "清除"; 
+                        width: 60px;
                         enabled: !root.downloading;
                         clicked => { root.clear-url-clicked(); }
                     }
@@ -54,24 +58,30 @@ export component MainWindow inherits Window {
                     spacing: 12px;
                     Text { text: "Cookies:"; vertical-alignment: center; width: 80px; }
                     Rectangle {
-                        background: #eee;
-                        border-radius: 4px;
-                        horizontal-stretch: 1;
-                        Text { 
-                            text: root.cookie-path; 
-                            vertical-alignment: center; 
-                            color: root.cookie-path == "未选择文件" ? #888 : #333;
-                            overflow: elide;
+                        background: #eee; 
+                        border-radius: 4px; 
+                        horizontal-stretch: 1; 
+                        height: 35px;
+                        // 使用 HorizontalBox 包裹 Text 以合法地实现 8px 左边距
+                        HorizontalBox {
+                            padding-left: 8px;
+                            Text { 
+                                text: root.cookie-path; 
+                                vertical-alignment: center; 
+                                color: root.cookie-path == "未选择文件" ? #888 : #333;
+                                overflow: elide;
+                            }
                         }
                     }
                     Button {
-                        text: "选择文件";
+                        text: "选择文件"; 
+                        width: 85px; 
                         enabled: !root.downloading;
                         clicked => { root.select-cookie-clicked() }
                     }
-                    // 只有选择了路径才显示删除按钮
                     if (root.cookie-path != "未选择文件") : Button {
-                        text: "移除";
+                        text: "移除"; 
+                        width: 65px; 
                         enabled: !root.downloading;
                         clicked => { root.clear-cookie-clicked() }
                     }
@@ -84,69 +94,71 @@ export component MainWindow inherits Window {
                     ComboBox {
                         model: ["4K (2160p)", "1080p (Full HD)", "720p (HD)", "480p"];
                         current-index <=> root.selected-quality-idx;
-                        enabled: !root.downloading;
+                        enabled: !root.downloading; 
+                        height: 35px;
                     }
-                    Rectangle { } 
+                    Rectangle { } // 占位占位
                 }
             }
         }
 
-        // --- 控制按钮区 (两个按钮始终可见) ---
+        // 2. 控制按钮区 - 同样固定高度
         HorizontalBox {
-            alignment: center;
-            spacing: 20px;
+            alignment: center; 
+            spacing: 20px; 
+            vertical-stretch: 0;
             
             Button {
-                text: "开始下载";
-                primary: true;
-                width: 150px;
-                height: 40px;
-                // 下载时变灰不可点
+                text: "开始下载"; 
+                primary: true; 
+                width: 160px; 
+                height: 45px;
                 enabled: !root.downloading; 
-                clicked => { 
-                    root.download-clicked(); 
-                }
+                clicked => { root.download-clicked(); }
             }
 
             Button {
-                text: "取消下载";
-                width: 150px;
-                height: 40px;
-                // 任何时候都可以点击
-                clicked => { 
-                    root.cancel-clicked();
-                }
+                text: "取消下载"; 
+                width: 160px; 
+                height: 45px;
+                clicked => { root.cancel-clicked(); }
             }
         }
 
-        // 日志区
-        // 日志区
+        // 3. 日志区 - vertical-stretch: 1 确保它占据所有剩余空间
         VerticalBox {
-            vertical-stretch: 1;
+            vertical-stretch: 1; 
             spacing: 8px;
             Text { text: "执行日志"; font-size: 14px; color: #666; }
             Rectangle {
-                background: #ffffff;
+                background: #ffffff; 
                 border-width: 1px; 
                 border-color: #e0e0e0; 
                 border-radius: 8px; 
                 clip: true;
                 
-                // 移除 ScrollView 上的 padding
-                ScrollView {
-                    // 在内部套一个布局，由它来提供 8px 的留白
-                    VerticalBox {
-                        padding: 8px; 
+                log-scroll := ScrollView {
+                    viewport-height: log-layout.preferred-height;
+                    
+                    log-layout := VerticalBox {
+                        padding: 12px;
                         Text {
-                            text: root.log-text;
+                            text: root.log-text; 
                             font-family: "monospace"; 
                             font-size: 13px; 
-                            wrap: word-wrap;
+                            wrap: word-wrap; 
                             color: #2c3e50;
                         }
                     }
                 }
             }
+        }
+    }
+
+    // 自动滚动逻辑：监听日志文本变化
+    changed log-text => {
+        if (log-scroll.viewport-height > log-scroll.visible-height) {
+            log-scroll.viewport-y = log-scroll.visible-height - log-scroll.viewport-height;
         }
     }
 }

@@ -4,29 +4,38 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
+use url::Url; // 新增：引入 URL 解析
+
+// 辅助函数：校验 URL 是否合法且为 HTTP/HTTPS
+fn is_valid_url(input: &str) -> bool {
+    match Url::parse(input) {
+        Ok(url) => {
+            let scheme = url.scheme();
+            scheme == "http" || scheme == "https"
+        }
+        Err(_) => false,
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), slint::PlatformError> {
     let ui = MainWindow::new()?;
     let ui_handle = ui.as_weak();
-
-    // 线程安全地持有当前下载进程
     let current_process: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
 
-    // --- 0. 启动初始化：尝试加载默认 Cookies ---
+    // --- 初始化：默认 Cookies ---
     if let Some(config_dir) = dirs::config_dir() {
         let default_path = config_dir.join("Zdownload").join("cookies.txt");
         if default_path.exists() {
-            // 修正点：使用 .to_string() 确保类型匹配
             ui.set_cookie_path(default_path.to_string_lossy().to_string().into());
             append_log(
                 &ui,
-                &format!("✅ 已自动加载默认 Cookies: {}", default_path.display()),
+                &format!("✅ 已加载默认 Cookies: {}", default_path.display()),
             );
         }
     }
 
-    // --- 1. UI 基础回调 ---
+    // --- UI 基础回调 ---
     ui.on_select_cookie_clicked({
         let ui_handle = ui_handle.clone();
         move || {
@@ -35,7 +44,6 @@ async fn main() -> Result<(), slint::PlatformError> {
                 .pick_file()
             {
                 if let Some(ui) = ui_handle.upgrade() {
-                    // 修正点：使用 .to_string() 确保类型匹配
                     ui.set_cookie_path(file.to_string_lossy().to_string().into());
                 }
             }
@@ -47,7 +55,7 @@ async fn main() -> Result<(), slint::PlatformError> {
         move || {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_cookie_path("未选择文件".into());
-                append_log(&ui, "Cookie 路径已从当前任务中移除。");
+                append_log(&ui, "Cookie 路径已移除。");
             }
         }
     });
@@ -61,25 +69,34 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // --- 2. 核心下载回调 ---
+    // --- 核心下载逻辑 ---
     ui.on_download_clicked({
         let ui_handle = ui_handle.clone();
         let proc_arc = current_process.clone();
         move || {
             let ui = ui_handle.upgrade().unwrap();
-            let url = ui.get_url().trim().to_string();
-            let cookie = ui.get_cookie_path().to_string();
-            let quality_idx = ui.get_selected_quality_idx();
+            let raw_url = ui.get_url().trim().to_string();
 
-            if url.is_empty() {
-                append_log(&ui, "❌ 错误: URL 不能为空。");
+            // 1. 拦截检查：空输入或非法 URL (乱码/空格等)
+            if raw_url.is_empty() {
+                append_log(&ui, "⚠️ 提示: 视频链接不能为空。");
                 return;
             }
 
-            ui.set_downloading(true);
-            append_log(&ui, "--- 准备下载任务 ---");
+            if !is_valid_url(&raw_url) {
+                append_log(
+                    &ui,
+                    "❌ 错误: 输入的链接格式非法（必须以 http/https 开头且无空格）。",
+                );
+                return;
+            }
 
-            // 画质映射
+            // 2. 状态锁定
+            ui.set_downloading(true);
+            append_log(&ui, "--- 准备下载 ---");
+
+            let cookie = ui.get_cookie_path().to_string();
+            let quality_idx = ui.get_selected_quality_idx();
             let format_arg = match quality_idx {
                 0 => "bestvideo[height<=2160]+bestaudio/best",
                 1 => "bestvideo[height<=1080]+bestaudio/best",
@@ -91,14 +108,13 @@ async fn main() -> Result<(), slint::PlatformError> {
             let proc_thread = proc_arc.clone();
 
             tokio::spawn(async move {
-                // 确定 yt-dlp 路径 (~/.local/share/zdownload/yt-dlp)
                 let bin_dir = dirs::data_dir().unwrap_or_default().join("zdownload");
                 let yt_dlp_path = bin_dir.join("yt-dlp");
 
-                // 检查组件
+                // 自动补齐组件
                 if !yt_dlp_path.exists() {
                     let _ = fs::create_dir_all(&bin_dir);
-                    update_ui_log(&ui_thread, "📦 正在下载 yt-dlp 组件...");
+                    update_ui_log(&ui_thread, "📦 正在获取下载引擎...");
                     let _ = Command::new("curl")
                         .args(&[
                             "-L",
@@ -108,7 +124,6 @@ async fn main() -> Result<(), slint::PlatformError> {
                         .arg(&yt_dlp_path)
                         .status()
                         .await;
-
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::PermissionsExt;
@@ -119,7 +134,6 @@ async fn main() -> Result<(), slint::PlatformError> {
 
                 let download_dir = dirs::download_dir()
                     .unwrap_or_else(|| dirs::home_dir().unwrap().join("Downloads"));
-
                 let mut args = vec![
                     "--newline".into(),
                     "--progress".into(),
@@ -127,7 +141,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                     format_arg.into(),
                     "-o".into(),
                     format!("{}/%(title)s.%(ext)s", download_dir.display()),
-                    url,
+                    raw_url,
                 ];
 
                 if cookie != "未选择文件" {
@@ -152,14 +166,13 @@ async fn main() -> Result<(), slint::PlatformError> {
                         update_ui_log_smart(&ui_thread, &line);
                     }
                 } else {
-                    update_ui_log(&ui_thread, "❌ 无法启动下载进程。");
+                    update_ui_log(&ui_thread, "❌ 引擎启动失败，请检查网络或权限。");
                 }
 
-                // 结束清理
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_thread.upgrade() {
                         ui.set_downloading(false);
-                        append_log(&ui, "✅ 任务执行完毕。");
+                        append_log(&ui, "✅ 任务完成。");
                     }
                 });
                 let mut lock = proc_thread.lock().unwrap();
@@ -168,33 +181,28 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // --- 3. 取消下载回调 ---
+    // --- 取消逻辑 ---
     ui.on_cancel_clicked({
         let proc_arc = current_process.clone();
         let ui_handle = ui_handle.clone();
         move || {
             let ui = ui_handle.upgrade().unwrap();
             let mut lock = proc_arc.lock().unwrap();
-
             if let Some(mut child) = lock.take() {
+                append_log(&ui, "⏳ 正在强制停止...");
                 let ui_thread = ui_handle.clone();
-                append_log(&ui, "⏳ 正在强制停止进程，请稍候...");
-
-                // 开启异步任务等待进程彻底死亡
                 tokio::spawn(async move {
-                    let _ = child.start_kill(); // 发送 kill 信号
-                    let _ = child.wait().await; // 关键：等待进程完全退出
-
-                    // 进程消失后，在 UI 线程通知用户
+                    let _ = child.start_kill();
+                    let _ = child.wait().await;
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_thread.upgrade() {
                             ui.set_downloading(false);
-                            append_log(&ui, "🛑 进程已完全退出，任务已取消。");
+                            append_log(&ui, "🛑 任务已取消。");
                         }
                     });
                 });
             } else {
-                append_log(&ui, "提示: 当前没有正在运行的任务。");
+                append_log(&ui, "提示: 当前无活跃任务。");
             }
         }
     });
@@ -202,13 +210,11 @@ async fn main() -> Result<(), slint::PlatformError> {
     ui.run()
 }
 
-// 辅助函数：普通日志
 fn append_log(ui: &MainWindow, text: &str) {
     let old = ui.get_log_text();
     ui.set_log_text(format!("{}{}\n", old, text).into());
 }
 
-// 辅助函数：跨线程日志
 fn update_ui_log(ui_handle: &slint::Weak<MainWindow>, text: &'static str) {
     let handle = ui_handle.clone();
     let _ = slint::invoke_from_event_loop(move || {
@@ -218,7 +224,6 @@ fn update_ui_log(ui_handle: &slint::Weak<MainWindow>, text: &'static str) {
     });
 }
 
-// 辅助函数：智能刷新进度
 fn update_ui_log_smart(ui_handle: &slint::Weak<MainWindow>, new_line: &str) {
     let handle = ui_handle.clone();
     let line = new_line.to_string();
@@ -226,7 +231,6 @@ fn update_ui_log_smart(ui_handle: &slint::Weak<MainWindow>, new_line: &str) {
         if let Some(ui) = handle.upgrade() {
             let mut log = ui.get_log_text().to_string();
             let trimmed = line.trim();
-            // 匹配进度行以实现原地刷新
             if (trimmed.starts_with("[download]") || trimmed.starts_with("[抽取]"))
                 && trimmed.contains('%')
                 && !trimmed.contains("100%")

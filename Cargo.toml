@@ -11,6 +11,7 @@ tokio = { version = "1.43", features = ["full"] }
 # 原生文件对话框，支持 GNOME/Windows 切换
 rfd = "0.15" 
 dirs = "6.0" # 用于处理跨平台的配置目录
+url = "2.5" # 新增：用于严谨的 URL 校验
 
 [build-dependencies]
 slint-build = "1.15.1"
