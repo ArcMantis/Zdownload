@@ -4,7 +4,7 @@ use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
-use url::Url; // 新增：引入 URL 解析
+use url::Url;
 
 // 辅助函数：校验 URL 是否合法且为 HTTP/HTTPS
 fn is_valid_url(input: &str) -> bool {
@@ -19,6 +19,10 @@ fn is_valid_url(input: &str) -> bool {
 
 #[tokio::main]
 async fn main() -> Result<(), slint::PlatformError> {
+    // 打印版本信息到终端
+    let version = env!("CARGO_PKG_VERSION");
+    println!("🚀 Zdownload v{} - 跨平台视频下载工具", version);
+
     let ui = MainWindow::new()?;
     let ui_handle = ui.as_weak();
     let current_process: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
@@ -36,14 +40,14 @@ async fn main() -> Result<(), slint::PlatformError> {
             append_log(
                 &ui,
                 &format!(
-                    "💡 提示: 若需下载会员视频，请手动选择或将 cookies.txt 放入: {}",
+                    "💡 提示: 若需下载会员视频，请将 cookies.txt 放入: {}",
                     default_path.display()
                 ),
             );
         }
     }
 
-    // --- UI 基础回调 ---
+    // --- UI 回调函数 ---
     ui.on_select_cookie_clicked({
         let ui_handle = ui_handle.clone();
         move || {
@@ -85,31 +89,29 @@ async fn main() -> Result<(), slint::PlatformError> {
             let ui = ui_handle.upgrade().unwrap();
             let raw_url = ui.get_url().trim().to_string();
 
-            // 1. 拦截检查：空输入或非法 URL (乱码/空格等)
             if raw_url.is_empty() {
                 append_log(&ui, "⚠️ 提示: 视频链接不能为空。");
                 return;
             }
 
             if !is_valid_url(&raw_url) {
-                append_log(
-                    &ui,
-                    "❌ 错误: 输入的链接格式非法（必须以 http/https 开头且无空格）。",
-                );
+                append_log(&ui, "❌ 错误: 输入的链接格式非法。");
                 return;
             }
 
-            // 2. 状态锁定
             ui.set_downloading(true);
-            append_log(&ui, "--- 准备下载 ---");
+            append_log(&ui, "--- 任务开始 ---");
 
             let cookie = ui.get_cookie_path().to_string();
             let quality_idx = ui.get_selected_quality_idx();
-            let format_arg = match quality_idx {
-                0 => "bestvideo[height<=2160]+bestaudio/best",
-                1 => "bestvideo[height<=1080]+bestaudio/best",
-                2 => "bestvideo[height<=720]+bestaudio/best",
-                _ => "bestvideo[height<=480]+bestaudio/best",
+
+            // 核心修改：根据索引选择参数
+            let (format_arg, is_audio_only) = match quality_idx {
+                0 => ("bestvideo[height<=2160]+bestaudio/best", false),
+                1 => ("bestvideo[height<=1080]+bestaudio/best", false),
+                2 => ("bestvideo[height<=720]+bestaudio/best", false),
+                3 => ("bestvideo[height<=480]+bestaudio/best", false),
+                _ => ("bestaudio/best", true), // 仅下载音频
             };
 
             let ui_thread = ui_handle.clone();
@@ -119,7 +121,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                 let bin_dir = dirs::data_dir().unwrap_or_default().join("zdownload");
                 let yt_dlp_path = bin_dir.join("yt-dlp");
 
-                // 自动补齐组件
+                // 自动检查并下载 yt-dlp
                 if !yt_dlp_path.exists() {
                     let _ = fs::create_dir_all(&bin_dir);
                     update_ui_log(&ui_thread, "📦 正在获取下载引擎...");
@@ -142,6 +144,7 @@ async fn main() -> Result<(), slint::PlatformError> {
 
                 let download_dir = dirs::download_dir()
                     .unwrap_or_else(|| dirs::home_dir().unwrap().join("Downloads"));
+
                 let mut args = vec![
                     "--newline".into(),
                     "--progress".into(),
@@ -149,8 +152,16 @@ async fn main() -> Result<(), slint::PlatformError> {
                     format_arg.into(),
                     "-o".into(),
                     format!("{}/%(title)s.%(ext)s", download_dir.display()),
-                    raw_url,
                 ];
+
+                // 如果是仅音频选项，添加音频提取参数
+                if is_audio_only {
+                    args.push("--extract-audio".into());
+                    args.push("--audio-format".into());
+                    args.push("mp3".into()); // 默认转为 mp3，你也可以改为 m4a
+                }
+
+                args.push(raw_url);
 
                 if cookie != "未选择文件" {
                     args.push("--cookies".into());
@@ -174,7 +185,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                         update_ui_log_smart(&ui_thread, &line);
                     }
                 } else {
-                    update_ui_log(&ui_thread, "❌ 引擎启动失败，请检查网络或权限。");
+                    update_ui_log(&ui_thread, "❌ 引擎启动失败。");
                 }
 
                 let _ = slint::invoke_from_event_loop(move || {
@@ -189,7 +200,7 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // --- 取消逻辑 ---
+    // --- 取消逻辑 (保持不变) ---
     ui.on_cancel_clicked({
         let proc_arc = current_process.clone();
         let ui_handle = ui_handle.clone();
@@ -218,6 +229,7 @@ async fn main() -> Result<(), slint::PlatformError> {
     ui.run()
 }
 
+// --- 辅助函数 (保持不变) ---
 fn append_log(ui: &MainWindow, text: &str) {
     let old = ui.get_log_text();
     ui.set_log_text(format!("{}{}\n", old, text).into());
