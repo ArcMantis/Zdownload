@@ -1,0 +1,16 @@
+[package]
+name = "zdownloadwin"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+slint = "1.15.1"
+# 异步运行时，处理后台下载进程
+tokio = { version = "1.43", features = ["full"] }
+# 原生文件对话框，支持 GNOME/Windows 切换
+rfd = "0.15" 
+dirs = "6.0" # 用于处理跨平台的配置目录
+
+[build-dependencies]
+slint-build = "1.15.1"

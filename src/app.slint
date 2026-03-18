@@ -1,0 +1,152 @@
+import { Button, VerticalBox, HorizontalBox, LineEdit, ScrollView, GroupBox, ComboBox } from "std-widgets.slint";
+
+export component MainWindow inherits Window {
+    title: "Zdownload";
+    preferred-width: 800px;
+    preferred-height: 600px;
+    min-width: 600px;
+    min-height: 500px;
+
+    // --- 状态数据 ---
+    in-out property <string> url: "";
+    in-out property <string> cookie-path: "未选择文件";
+    in-out property <string> log-text: "等待任务开始...\n";
+    in-out property <int> selected-quality-idx: 1; 
+    in-out property <bool> downloading: false;
+
+    // --- 回调 ---
+    callback download-clicked();
+    callback cancel-clicked();
+    callback select-cookie-clicked();
+    callback clear-cookie-clicked();
+    callback clear-url-clicked();
+
+    background: @linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+
+    VerticalBox {
+        padding: 24px;
+        spacing: 20px;
+
+        GroupBox {
+            title: "下载任务配置";
+            VerticalBox {
+                spacing: 12px;
+                
+                // URL 栏
+                HorizontalBox {
+                    spacing: 12px;
+                    Text { text: "视频链接:"; vertical-alignment: center; width: 80px; }
+                    LineEdit {
+                        text <=> root.url;
+                        placeholder-text: "粘贴视频地址";
+                        enabled: !root.downloading;
+                    }
+                    // 只有有内容时才显示清除按钮，且下载中禁用
+                    if (root.url != "") : Button {
+                        text: "清除";
+                        enabled: !root.downloading;
+                        clicked => { root.clear-url-clicked(); }
+                    }
+                }
+
+                // Cookies 栏
+                HorizontalBox {
+                    spacing: 12px;
+                    Text { text: "Cookies:"; vertical-alignment: center; width: 80px; }
+                    Rectangle {
+                        background: #eee;
+                        border-radius: 4px;
+                        horizontal-stretch: 1;
+                        Text { 
+                            text: root.cookie-path; 
+                            vertical-alignment: center; 
+                            color: root.cookie-path == "未选择文件" ? #888 : #333;
+                            overflow: elide;
+                        }
+                    }
+                    Button {
+                        text: "选择文件";
+                        enabled: !root.downloading;
+                        clicked => { root.select-cookie-clicked() }
+                    }
+                    // 只有选择了路径才显示删除按钮
+                    if (root.cookie-path != "未选择文件") : Button {
+                        text: "移除";
+                        enabled: !root.downloading;
+                        clicked => { root.clear-cookie-clicked() }
+                    }
+                }
+
+                // 画质栏
+                HorizontalBox {
+                    spacing: 12px;
+                    Text { text: "优先画质:"; vertical-alignment: center; width: 80px; }
+                    ComboBox {
+                        model: ["4K (2160p)", "1080p (Full HD)", "720p (HD)", "480p"];
+                        current-index <=> root.selected-quality-idx;
+                        enabled: !root.downloading;
+                    }
+                    Rectangle { } 
+                }
+            }
+        }
+
+        // --- 控制按钮区 (两个按钮始终可见) ---
+        HorizontalBox {
+            alignment: center;
+            spacing: 20px;
+            
+            Button {
+                text: "开始下载";
+                primary: true;
+                width: 150px;
+                height: 40px;
+                // 下载时变灰不可点
+                enabled: !root.downloading; 
+                clicked => { 
+                    root.download-clicked(); 
+                }
+            }
+
+            Button {
+                text: "取消下载";
+                width: 150px;
+                height: 40px;
+                // 任何时候都可以点击
+                clicked => { 
+                    root.cancel-clicked();
+                }
+            }
+        }
+
+        // 日志区
+        // 日志区
+        VerticalBox {
+            vertical-stretch: 1;
+            spacing: 8px;
+            Text { text: "执行日志"; font-size: 14px; color: #666; }
+            Rectangle {
+                background: #ffffff;
+                border-width: 1px; 
+                border-color: #e0e0e0; 
+                border-radius: 8px; 
+                clip: true;
+                
+                // 移除 ScrollView 上的 padding
+                ScrollView {
+                    // 在内部套一个布局，由它来提供 8px 的留白
+                    VerticalBox {
+                        padding: 8px; 
+                        Text {
+                            text: root.log-text;
+                            font-family: "monospace"; 
+                            font-size: 13px; 
+                            wrap: word-wrap;
+                            color: #2c3e50;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
