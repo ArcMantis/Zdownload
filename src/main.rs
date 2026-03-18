@@ -32,6 +32,14 @@ async fn main() -> Result<(), slint::PlatformError> {
                 &ui,
                 &format!("✅ 已加载默认 Cookies: {}", default_path.display()),
             );
+        } else {
+            append_log(
+                &ui,
+                &format!(
+                    "💡 提示: 若需下载会员视频，请手动选择或将 cookies.txt 放入: {}",
+                    default_path.display()
+                ),
+            );
         }
     }
 

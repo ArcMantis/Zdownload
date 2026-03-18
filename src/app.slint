@@ -2,52 +2,63 @@ import { Button, VerticalBox, HorizontalBox, LineEdit, ScrollView, GroupBox, Com
 
 export component MainWindow inherits Window {
     title: "Zdownload";
-    preferred-width: 800px;
-    preferred-height: 600px;
-    min-width: 600px;
-    min-height: 500px;
+    // 针对高分辨率屏幕优化的初始尺寸
+    preferred-width: 850px;
+    preferred-height: 650px;
+    min-width: 700px;
+    min-height: 550px;
 
-    // --- 状态数据 ---
     in-out property <string> url: "";
     in-out property <string> cookie-path: "未选择文件";
-    in-out property <string> log-text: "等待任务开始...\n";
+    in-out property <string> log-text: "Zdownload v0.1.0\n等待任务开始...\n";
     in-out property <int> selected-quality-idx: 1; 
     in-out property <bool> downloading: false;
 
-    // --- 回调接口 ---
     callback download-clicked();
     callback cancel-clicked();
     callback select-cookie-clicked();
     callback clear-cookie-clicked();
     callback clear-url-clicked();
 
-    background: @linear-gradient(180deg, #f8f9fa 0%, #ffffff 100%);
+    // 采用极浅的灰色渐变，在 Windows 和 Linux 下都有很好的层次感
+    background: @linear-gradient(180deg, #f5f7f9 0%, #ffffff 100%);
+    
+    // --- 方案实现：UI 界面使用系统默认无衬线字体 ---
+    default-font-family: "sans-serif"; 
+    default-font-size: 14px;
 
     VerticalBox {
-        padding: 24px;
-        spacing: 20px;
+        padding: 30px; 
+        spacing: 25px; 
 
-        // 1. 下载配置组 - vertical-stretch: 0 确保拉伸窗口时它不会变高
+        // 1. 下载配置组 - 12px 圆角增加现代感
         GroupBox {
             title: "下载任务配置";
             vertical-stretch: 0;
             VerticalBox {
-                spacing: 10px;
-                padding: 5px;
+                spacing: 15px; 
+                padding: 15px;
                 
                 // URL 栏
                 HorizontalBox {
-                    spacing: 12px;
-                    Text { text: "视频链接:"; vertical-alignment: center; width: 80px; }
+                    spacing: 15px;
+                    Text { 
+                        text: "视频链接:"; 
+                        vertical-alignment: center; 
+                        width: 90px; 
+                        font-weight: 600; 
+                        color: #4a5568; 
+                    }
                     LineEdit {
                         text <=> root.url;
-                        placeholder-text: "粘贴视频地址";
+                        placeholder-text: "在此粘贴视频地址...";
                         enabled: !root.downloading;
-                        height: 35px;
+                        height: 40px; 
                     }
                     if (root.url != "") : Button {
-                        text: "清除"; 
-                        width: 60px;
+                        text: "清除";
+                        width: 70px;
+                        height: 40px;
                         enabled: !root.downloading;
                         clicked => { root.clear-url-clicked(); }
                     }
@@ -55,33 +66,41 @@ export component MainWindow inherits Window {
 
                 // Cookies 栏
                 HorizontalBox {
-                    spacing: 12px;
-                    Text { text: "Cookies:"; vertical-alignment: center; width: 80px; }
+                    spacing: 15px;
+                    Text { 
+                        text: "Cookies:"; 
+                        vertical-alignment: center; 
+                        width: 90px; 
+                        font-weight: 600;
+                        color: #4a5568;
+                    }
                     Rectangle {
-                        background: #eee; 
-                        border-radius: 4px; 
-                        horizontal-stretch: 1; 
-                        height: 35px;
-                        // 使用 HorizontalBox 包裹 Text 以合法地实现 8px 左边距
+                        background: #edf2f7; 
+                        border-radius: 8px; 
+                        horizontal-stretch: 1;
+                        height: 40px;
                         HorizontalBox {
-                            padding-left: 8px;
+                            padding-left: 12px;
                             Text { 
                                 text: root.cookie-path; 
                                 vertical-alignment: center; 
-                                color: root.cookie-path == "未选择文件" ? #888 : #333;
+                                color: root.cookie-path == "未选择文件" ? #a0aec0 : #2d3748;
                                 overflow: elide;
+                                font-size: 13px;
                             }
                         }
                     }
                     Button {
-                        text: "选择文件"; 
-                        width: 85px; 
+                        text: "选择文件";
+                        width: 90px;
+                        height: 40px;
                         enabled: !root.downloading;
                         clicked => { root.select-cookie-clicked() }
                     }
                     if (root.cookie-path != "未选择文件") : Button {
-                        text: "移除"; 
-                        width: 65px; 
+                        text: "移除";
+                        width: 70px;
+                        height: 40px;
                         enabled: !root.downloading;
                         clicked => { root.clear-cookie-clicked() }
                     }
@@ -89,65 +108,77 @@ export component MainWindow inherits Window {
 
                 // 画质栏
                 HorizontalBox {
-                    spacing: 12px;
-                    Text { text: "优先画质:"; vertical-alignment: center; width: 80px; }
+                    spacing: 15px;
+                    Text { 
+                        text: "优先画质:"; 
+                        vertical-alignment: center; 
+                        width: 90px; 
+                        font-weight: 600;
+                        color: #4a5568;
+                    }
                     ComboBox {
                         model: ["4K (2160p)", "1080p (Full HD)", "720p (HD)", "480p"];
                         current-index <=> root.selected-quality-idx;
-                        enabled: !root.downloading; 
-                        height: 35px;
+                        enabled: !root.downloading;
+                        height: 40px;
                     }
-                    Rectangle { } // 占位占位
+                    Rectangle { } 
                 }
             }
         }
 
-        // 2. 控制按钮区 - 同样固定高度
+        // 2. 控制按钮区
         HorizontalBox {
-            alignment: center; 
-            spacing: 20px; 
+            alignment: center;
+            spacing: 30px;
             vertical-stretch: 0;
             
             Button {
-                text: "开始下载"; 
-                primary: true; 
-                width: 160px; 
-                height: 45px;
+                text: "开始下载";
+                primary: true;
+                width: 200px;
+                height: 50px;
                 enabled: !root.downloading; 
                 clicked => { root.download-clicked(); }
             }
 
             Button {
-                text: "取消下载"; 
-                width: 160px; 
-                height: 45px;
+                text: "取消下载";
+                width: 200px;
+                height: 50px;
                 clicked => { root.cancel-clicked(); }
             }
         }
 
-        // 3. 日志区 - vertical-stretch: 1 确保它占据所有剩余空间
+        // 3. 日志区
         VerticalBox {
-            vertical-stretch: 1; 
-            spacing: 8px;
-            Text { text: "执行日志"; font-size: 14px; color: #666; }
+            vertical-stretch: 1;
+            spacing: 10px;
+            Text { 
+                text: "执行日志"; 
+                font-size: 14px; 
+                font-weight: 700; 
+                color: #718096; 
+            }
             Rectangle {
-                background: #ffffff; 
-                border-width: 1px; 
-                border-color: #e0e0e0; 
-                border-radius: 8px; 
+                background: #ffffff;
+                border-width: 1.5px; 
+                border-color: #e2e8f0; 
+                border-radius: 12px; 
                 clip: true;
                 
                 log-scroll := ScrollView {
                     viewport-height: log-layout.preferred-height;
                     
                     log-layout := VerticalBox {
-                        padding: 12px;
+                        padding: 20px; 
                         Text {
-                            text: root.log-text; 
+                            text: root.log-text;
+                            // --- 方案实现：日志区域使用系统默认等宽字体 ---
                             font-family: "monospace"; 
-                            font-size: 13px; 
-                            wrap: word-wrap; 
-                            color: #2c3e50;
+                            font-size: 16px; 
+                            wrap: word-wrap;
+                            color: #2d3748;
                         }
                     }
                 }
@@ -155,7 +186,7 @@ export component MainWindow inherits Window {
         }
     }
 
-    // 自动滚动逻辑：监听日志文本变化
+    // 自动滚动
     changed log-text => {
         if (log-scroll.viewport-height > log-scroll.visible-height) {
             log-scroll.viewport-y = log-scroll.visible-height - log-scroll.viewport-height;
