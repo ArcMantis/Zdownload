@@ -1,7 +1,6 @@
 #![windows_subsystem = "windows"]
 slint::include_modules!();
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -22,11 +21,14 @@ fn is_valid_url(input: &str) -> bool {
 #[tokio::main]
 async fn main() -> Result<(), slint::PlatformError> {
     let version = env!("CARGO_PKG_VERSION");
-    println!("🚀 Zdownload v{} - 跨平台视频下载工具", version);
-
     let ui = MainWindow::new()?;
     let ui_handle = ui.as_weak();
     let current_process: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+
+    append_log(
+        &ui,
+        &format!("🚀 Zdownload v{} - 跨平台视频下载工具", version),
+    );
 
     // --- 初始化：默认 Cookies ---
     if let Some(config_dir) = dirs::config_dir() {
