@@ -1,5 +1,10 @@
 #![windows_subsystem = "windows"]
 slint::include_modules!();
+
+// 针对 Windows 的特有扩展引用
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
 use std::fs;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
@@ -42,7 +47,7 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     }
 
-    // --- UI 回调 (保持原样) ---
+    // --- UI 回调 ---
     ui.on_select_cookie_clicked({
         let ui_handle = ui_handle.clone();
         move || {
@@ -110,14 +115,12 @@ async fn main() -> Result<(), slint::PlatformError> {
             let proc_thread = proc_arc.clone();
 
             tokio::spawn(async move {
-                // 1. 确定对应系统的文件名
                 let bin_name = if cfg!(target_os = "windows") {
                     "yt-dlp.exe"
                 } else {
                     "yt-dlp"
                 };
 
-                // 2. 环境探测：先找系统环境变量，再找私有目录
                 let yt_dlp_path = if let Ok(p) = which::which(bin_name) {
                     p
                 } else {
@@ -134,7 +137,6 @@ async fn main() -> Result<(), slint::PlatformError> {
                             "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp"
                         };
 
-                        // 使用 reqwest 下载，比 Command curl 更跨平台可靠
                         if let Ok(resp) = reqwest::get(url).await {
                             if let Ok(bytes) = resp.bytes().await {
                                 if fs::write(&p, bytes).is_ok() {
@@ -179,6 +181,12 @@ async fn main() -> Result<(), slint::PlatformError> {
                 }
 
                 let mut cmd = Command::new(&yt_dlp_path);
+
+                #[cfg(windows)]
+                {
+                    cmd.creation_flags(0x08000000);
+                }
+
                 cmd.args(&args)
                     .stdout(Stdio::piped())
                     .stderr(Stdio::piped());
@@ -195,13 +203,16 @@ async fn main() -> Result<(), slint::PlatformError> {
                         update_ui_log_smart(&ui_thread, &line);
                     }
                 } else {
-                    update_ui_log_str(&ui_thread, "❌ 引擎启动失败，请检查是否安装了 ffmpeg。");
+                    update_ui_log_str(&ui_thread, "❌ 引擎启动失败。");
                 }
 
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_thread.upgrade() {
-                        ui.set_downloading(false);
-                        append_log(&ui, "✅ 任务结束。");
+                        // 只有未被手动取消时，才打印自然结束
+                        if ui.get_downloading() {
+                            ui.set_downloading(false);
+                            append_log(&ui, "✅ 任务结束。");
+                        }
                     }
                 });
                 let mut lock = proc_thread.lock().unwrap();
@@ -210,21 +221,39 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
+    // --- 取消逻辑：解决异步竞争 ---
     ui.on_cancel_clicked({
         let proc_arc = current_process.clone();
         let ui_handle = ui_handle.clone();
         move || {
             let ui = ui_handle.upgrade().unwrap();
+
+            // 1. 立即同步设为 false，阻塞下载循环的结束日志
+            ui.set_downloading(false);
+
             let mut lock = proc_arc.lock().unwrap();
             if let Some(mut child) = lock.take() {
                 append_log(&ui, "⏳ 正在强制停止...");
                 let ui_thread = ui_handle.clone();
+
+                #[cfg(windows)]
+                let pid = child.id();
+
                 tokio::spawn(async move {
+                    #[cfg(windows)]
+                    if let Some(id) = pid {
+                        let _ = std::process::Command::new("taskkill")
+                            .args(&["/F", "/T", "/PID", &id.to_string()])
+                            .creation_flags(0x08000000)
+                            .status();
+                    }
+
+                    #[cfg(unix)]
                     let _ = child.start_kill();
+
                     let _ = child.wait().await;
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_thread.upgrade() {
-                            ui.set_downloading(false);
                             append_log(&ui, "🛑 任务已取消。");
                         }
                     });
