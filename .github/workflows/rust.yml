@@ -11,7 +11,7 @@ jobs:
     name: Build and Release
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 必须开启写入权限才能创建 Release
+      contents: write
 
     steps:
     - uses: actions/checkout@v4
@@ -27,21 +27,35 @@ jobs:
         sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev
         sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
 
+    - name: Get Version from Cargo.toml
+      id: get_version
+      run: |
+        # 提取 Cargo.toml 中的版本号并存入环境变量
+        VERSION=$(grep '^version =' Cargo.toml | head -n 1 | cut -d '"' -f 2)
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+        echo "v$VERSION"
+
     - name: Build Linux Release
-      run: cargo build --release --verbose
+      run: |
+        cargo build --release
+        # 重命名产物，加上版本和架构标识
+        mv target/release/zdownloadwin zdownload-v${{ env.VERSION }}-x86_64-unknown-linux-gnu
 
     - name: Build Windows Release
-      run: cargo build --release --target x86_64-pc-windows-gnu --verbose
+      run: |
+        cargo build --release --target x86_64-pc-windows-gnu
+        # 重命名产物，加上版本和架构标识
+        mv target/x86_64-pc-windows-gnu/release/zdownloadwin.exe zdownload-v${{ env.VERSION }}-x86_64-pc-windows-gnu.exe
 
     - name: Create Release and Upload Assets
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: manual-${{ github.run_id }}
-        name: Manual Build ${{ github.run_id }}
+        tag_name: v${{ env.VERSION }}-${{ github.run_number }}
+        name: Release v${{ env.VERSION }}
         draft: false
         prerelease: false
         files: |
-          target/release/zdownloadwin
-          target/x86_64-pc-windows-gnu/release/zdownloadwin.exe
+          zdownload-v${{ env.VERSION }}-x86_64-unknown-linux-gnu
+          zdownload-v${{ env.VERSION }}-x86_64-pc-windows-gnu.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
