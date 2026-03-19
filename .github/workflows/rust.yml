@@ -1,0 +1,53 @@
+name: Rust Build & Release
+
+on:
+  push:
+    branches: [ "master", "main" ]
+  pull_request:
+    branches: [ "master", "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # 使用 Ubuntu 最新版来模拟 Debian 开发环境，并交叉编译 Windows
+        os: [ubuntu-latest]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Rust Toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
+
+    - name: Install Dependencies (Debian/Ubuntu style)
+      run: |
+        sudo apt-get update
+        # 安装 Slint 所需的底层图形库依赖
+        sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev
+        # 安装 Windows 交叉编译工具链 (MinGW)
+        sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
+
+    - name: Build Linux Release
+      run: cargo build --release --verbose
+
+    - name: Build Windows Release
+      run: cargo build --release --target x86_64-pc-windows-gnu --verbose
+
+    - name: Upload Linux Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: zdownload-linux
+        path: target/release/zdownloadwin
+
+    - name: Upload Windows Binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: zdownload-windows
+        path: target/x86_64-pc-windows-gnu/release/zdownloadwin.exe
