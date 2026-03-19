@@ -56,7 +56,10 @@ async fn main() -> Result<(), slint::PlatformError> {
                 .pick_file()
             {
                 if let Some(ui) = ui_handle.upgrade() {
-                    ui.set_cookie_path(file.to_string_lossy().to_string().into());
+                    // 1. 获取路径字符串,并打印
+                    let path_str = file.to_string_lossy();
+                    ui.set_cookie_path(path_str.as_ref().into());
+                    append_log(&ui, &format!("✅ 已加载: {}", path_str));
                 }
             }
         }
@@ -67,6 +70,7 @@ async fn main() -> Result<(), slint::PlatformError> {
         move || {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_cookie_path("未选择文件".into());
+                append_log(&ui, "✅已清空cookies路径~");
             }
         }
     });
