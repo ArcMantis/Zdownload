@@ -1,10 +1,8 @@
-name: Rust Build & Release
+name: Rust Manual Build
 
 on:
-  push:
-    branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+  # 开启手动触发开关
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,10 +10,9 @@ env:
 jobs:
   build:
     name: Build on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 使用 Ubuntu 最新版来模拟 Debian 开发环境，并交叉编译 Windows
         os: [ubuntu-latest]
 
     steps:
@@ -26,12 +23,12 @@ jobs:
       with:
         targets: x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu
 
-    - name: Install Dependencies (Debian/Ubuntu style)
+    - name: Install Dependencies
       run: |
         sudo apt-get update
-        # 安装 Slint 所需的底层图形库依赖
+        # Slint 编译所需的图形库依赖
         sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev
-        # 安装 Windows 交叉编译工具链 (MinGW)
+        # Windows 交叉编译工具
         sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
 
     - name: Build Linux Release
