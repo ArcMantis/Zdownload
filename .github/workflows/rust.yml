@@ -1,7 +1,6 @@
-name: Rust Manual Build
+name: Rust Manual Build & Release
 
 on:
-  # 开启手动触发开关
   workflow_dispatch:
 
 env:
@@ -9,11 +8,10 @@ env:
 
 jobs:
   build:
-    name: Build on ${{ matrix.os }}
+    name: Build and Release
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: [ubuntu-latest]
+    permissions:
+      contents: write # 必须开启写入权限才能创建 Release
 
     steps:
     - uses: actions/checkout@v4
@@ -26,9 +24,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        # Slint 编译所需的图形库依赖
         sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev
-        # Windows 交叉编译工具
         sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
 
     - name: Build Linux Release
@@ -37,14 +33,15 @@ jobs:
     - name: Build Windows Release
       run: cargo build --release --target x86_64-pc-windows-gnu --verbose
 
-    - name: Upload Linux Binary
-      uses: actions/upload-artifact@v4
+    - name: Create Release and Upload Assets
+      uses: softprops/action-gh-release@v2
       with:
-        name: zdownload-linux
-        path: target/release/zdownloadwin
-
-    - name: Upload Windows Binary
-      uses: actions/upload-artifact@v4
-      with:
-        name: zdownload-windows
-        path: target/x86_64-pc-windows-gnu/release/zdownloadwin.exe
+        tag_name: manual-${{ github.run_id }}
+        name: Manual Build ${{ github.run_id }}
+        draft: false
+        prerelease: false
+        files: |
+          target/release/zdownloadwin
+          target/x86_64-pc-windows-gnu/release/zdownloadwin.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
