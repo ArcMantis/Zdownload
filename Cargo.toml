@@ -1,6 +1,6 @@
 [package]
 name = "zdownloadwin"
-version = "1.0.2603"
+version = "1.1.2603"
 edition = "2024"
 build = "build.rs"
 

@@ -6762,7 +6762,7 @@ dependencies = [
 
 [[package]]
 name = "zdownloadwin"
-version = "1.0.2603"
+version = "1.1.2603"
 dependencies = [
  "dirs",
  "reqwest",
