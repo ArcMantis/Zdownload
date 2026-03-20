@@ -6,15 +6,16 @@ build = "build.rs"
 
 [dependencies]
 slint = "1.15.1"
-# 异步运行时，处理后台下载进程
+# Handle background download processes when running asynchronously.
 tokio = { version = "1.43", features = ["full"] }
-# 原生文件对话框，支持 GNOME/Windows 切换
+# Native file dialog box, supports GNOME/Windows switching
 rfd = "0.15" 
-dirs = "6.0" # 用于处理跨平台的配置目录
-url = "2.5" # 新增：用于严谨的 URL 校验
+dirs = "6.0" # Configuration directory for cross-platform handling
+url = "2.5" # Added: For rigorous URL validation
 which = "6.0"
-# 使用 rustls-tls 避免 Debian 交叉编译时寻找 Windows 的 OpenSSL 库
+# Use rustls-tls to avoid Debian cross-compiling searching for the Windows OpenSSL library
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+sys-locale = "0.3"
 
 [build-dependencies]
 slint-build = "1.15.1"

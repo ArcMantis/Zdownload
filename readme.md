@@ -1,3 +1,7 @@
+<p align="right">
+  <a href="./readme_CN.md">简体中文</a> | <b>English</b>
+</p>
+
 # Zdownload – Cross-Platform Video Download Tool 🚀
 
 A lightweight video-downloading frontend built with Rust + Slint.  
@@ -5,13 +9,21 @@ Supports development on Debian 13, and can be cross-compiled to Windows with a s
 
 ---
 
+## 🌐 多语言界面展示 / Multi-language UI
+
+| 🇨🇳 简体中文界面 | 🇺🇸 English Interface |
+| :---: | :---: |
+| ![CN](./docs/Preview_CN.png) | ![EN](./docs/Preview_EN.png) |
+| *支持原生中文显示* | *Full English Support* |
+
+
 ## 🛠️ Build Environment Setup (Debian 13)
 
 Before compiling, make sure your system has the required Rust cross-compilation environment configured.
 
 ---
 
-## 🔧 Build for Windows
+## 🔧 Build for Windows 🪟
 
 ```bash
 # Build for Windows platform
@@ -27,6 +39,7 @@ sudo apt update && sudo apt install binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-
 cargo build --release --target x86_64-pc-windows-gnu
 ```
 
+## 🔧 Build for Linux 🐧
 ```bash
 # Build for Linux platform
 

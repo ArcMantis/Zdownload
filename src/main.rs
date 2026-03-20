@@ -1,9 +1,15 @@
 #![windows_subsystem = "windows"]
 slint::include_modules!();
 
-// 针对 Windows 的特有扩展引用
+// MS-Windows-specific extended references
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+
+macro_rules! tr {
+    ($ui:expr, $zh:expr, $en:expr) => {
+        if $ui.get_is_chinese() { $zh } else { $en }
+    };
+}
 
 use std::fs;
 use std::process::Stdio;
@@ -12,7 +18,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use url::Url;
 
-// 辅助函数：校验 URL 是否合法且为 HTTP/HTTPS
+// Helper function: Validates whether the URL is valid and is HTTP/HTTPS.
 fn is_valid_url(input: &str) -> bool {
     match Url::parse(input) {
         Ok(url) => {
@@ -30,24 +36,47 @@ async fn main() -> Result<(), slint::PlatformError> {
     let ui_handle = ui.as_weak();
     let current_process: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
 
+    // Get the system language, such as "zh-CN" or "en-US".
+    let locale = sys_locale::get_locale().unwrap_or_else(|| "en-US".to_string());
+    // If it is not in Simplified Chinese, then set it to English mode.
+    let is_chinese = locale.starts_with("zh-CN") || locale.starts_with("zh");
+    // Pass this boolean value to Slint (this property needs to be defined in .slint).
+    ui.set_is_chinese(is_chinese);
+
+    //welcome msg
     append_log(
         &ui,
-        &format!("🚀 Zdownload v{} - 跨平台视频下载工具", version),
+        &format!(
+            "🚀 Zdownload v{} -{}",
+            version,
+            tr!(ui, "跨平台视频下载工具", "Cross-platform Video Downloader")
+        ),
     );
 
-    // --- 初始化：默认 Cookies ---
-    if let Some(config_dir) = dirs::config_dir() {
-        let default_path = config_dir.join("Zdownload").join("cookies.txt");
-        if default_path.exists() {
-            ui.set_cookie_path(default_path.to_string_lossy().to_string().into());
-            append_log(
-                &ui,
-                &format!("✅ 已加载默认 Cookies: {}", default_path.display()),
-            );
+    // --- Initialization: Default Cookies ---
+    {
+        if let Some(config_dir) = dirs::config_dir() {
+            let default_path = config_dir.join("Zdownload").join("cookies.txt");
+            if default_path.exists() {
+                ui.set_cookie_path(default_path.to_string_lossy().to_string().into());
+
+                append_log(
+                    &ui,
+                    &format!(
+                        "✅{} -> {}",
+                        tr!(
+                            ui,
+                            "加载默认的Cookies成功!",
+                            "Default cookies loaded successfully!"
+                        ),
+                        default_path.display()
+                    ),
+                );
+            }
         }
     }
 
-    // --- UI 回调 ---
+    // --- UI Callback ---
     ui.on_select_cookie_clicked({
         let ui_handle = ui_handle.clone();
         move || {
@@ -56,10 +85,13 @@ async fn main() -> Result<(), slint::PlatformError> {
                 .pick_file()
             {
                 if let Some(ui) = ui_handle.upgrade() {
-                    // 1. 获取路径字符串,并打印
+                    // 1. Get the path string and print it.
                     let path_str = file.to_string_lossy();
                     ui.set_cookie_path(path_str.as_ref().into());
-                    append_log(&ui, &format!("✅ 已加载: {}", path_str));
+                    append_log(
+                        &ui,
+                        &format!("✅ {}: {}", tr!(ui, "已加载", "Loaded."), path_str),
+                    );
                 }
             }
         }
@@ -70,7 +102,10 @@ async fn main() -> Result<(), slint::PlatformError> {
         move || {
             if let Some(ui) = ui_handle.upgrade() {
                 ui.set_cookie_path("未选择文件".into());
-                append_log(&ui, "✅已清空cookies路径~");
+                append_log(
+                    &ui,
+                    tr!(ui, "✅已清空cookies路径~", "✅Cookie path has been cleared"),
+                );
             }
         }
     });
@@ -84,7 +119,7 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // --- 核心下载逻辑 ---
+    // --- Core Download Logic ---
     ui.on_download_clicked({
         let ui_handle = ui_handle.clone();
         let proc_arc = current_process.clone();
@@ -93,18 +128,34 @@ async fn main() -> Result<(), slint::PlatformError> {
             let raw_url = ui.get_url().trim().to_string();
 
             if raw_url.is_empty() {
-                append_log(&ui, "⚠️ 提示: 视频链接不能为空。");
+                append_log(
+                    &ui,
+                    tr!(
+                        ui,
+                        "⚠️ 提示: 视频链接不能为空。",
+                        "⚠️ Note: Video links cannot be empty."
+                    ),
+                );
                 return;
             }
             if !is_valid_url(&raw_url) {
-                append_log(&ui, "❌ 错误: 输入的链接格式非法。");
+                append_log(
+                    &ui,
+                    tr!(
+                        ui,
+                        "❌ 错误: 输入的链接格式非法。",
+                        "❌ Error: The entered link format is invalid."
+                    ),
+                );
                 return;
             }
 
             ui.set_downloading(true);
-            append_log(&ui, "--- 任务开始 ---");
+            append_log(&ui, tr!(ui, "--- 任务开始 ---", "Task begins"));
 
             let cookie = ui.get_cookie_path().to_string();
+            let cookie_placeholder_cn = ui.get_cookie_path_default_cn().to_string();
+            let cookie_placeholder_en = ui.get_cookie_path_default_en().to_string();
             let quality_idx = ui.get_selected_quality_idx();
 
             let (format_arg, is_audio_only) = match quality_idx {
@@ -133,7 +184,7 @@ async fn main() -> Result<(), slint::PlatformError> {
 
                     if !p.exists() {
                         let _ = fs::create_dir_all(&bin_dir);
-                        update_ui_log_str(&ui_thread, "📦 正在获取下载引擎 (yt-dlp)...");
+                        update_ui_log_str(&ui_thread, "📦 Fetching (yt-dlp)...");
 
                         let url = if cfg!(target_os = "windows") {
                             "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
@@ -152,7 +203,10 @@ async fn main() -> Result<(), slint::PlatformError> {
                                             fs::Permissions::from_mode(0o755),
                                         );
                                     }
-                                    update_ui_log_str(&ui_thread, "✅ 引擎下载成功。");
+                                    update_ui_log_str(
+                                        &ui_thread,
+                                        "✅ Engine binary deployed successfully",
+                                    );
                                 }
                             }
                         }
@@ -179,7 +233,10 @@ async fn main() -> Result<(), slint::PlatformError> {
                 }
 
                 args.push(raw_url);
-                if cookie != "未选择文件" {
+                if !cookie.is_empty()
+                    && cookie != cookie_placeholder_cn
+                    && cookie != cookie_placeholder_en
+                {
                     args.push("--cookies".into());
                     args.push(cookie);
                 }
@@ -207,15 +264,18 @@ async fn main() -> Result<(), slint::PlatformError> {
                         update_ui_log_smart(&ui_thread, &line);
                     }
                 } else {
-                    update_ui_log_str(&ui_thread, "❌ 引擎启动失败。");
+                    update_ui_log_str(
+                        &ui_thread,
+                        "❌ En: Engine startup failed./zh_CN: 引擎启动失败.",
+                    );
                 }
 
                 let _ = slint::invoke_from_event_loop(move || {
                     if let Some(ui) = ui_thread.upgrade() {
-                        // 只有未被手动取消时，才打印自然结束
+                        // Printing will only end naturally if it is not manually canceled.
                         if ui.get_downloading() {
                             ui.set_downloading(false);
-                            append_log(&ui, "✅ 任务结束。");
+                            append_log(&ui, tr!(ui, "✅ 任务结束。", "✅ Task completed"));
                         }
                     }
                 });
@@ -225,19 +285,19 @@ async fn main() -> Result<(), slint::PlatformError> {
         }
     });
 
-    // --- 取消逻辑：解决异步竞争 ---
+    // --- Cancellation logic: Resolving asynchronous race conditions ---
     ui.on_cancel_clicked({
         let proc_arc = current_process.clone();
         let ui_handle = ui_handle.clone();
         move || {
             let ui = ui_handle.upgrade().unwrap();
 
-            // 1. 立即同步设为 false，阻塞下载循环的结束日志
+            // 1. Set Immediate Synchronization to false to block the end log of the download loop.
             ui.set_downloading(false);
 
             let mut lock = proc_arc.lock().unwrap();
             if let Some(mut child) = lock.take() {
-                append_log(&ui, "⏳ 正在强制停止...");
+                append_log(&ui, tr!(ui, "⏳正在强制停止...", "⏳Force stopping..."));
                 let ui_thread = ui_handle.clone();
 
                 #[cfg(windows)]
@@ -258,7 +318,7 @@ async fn main() -> Result<(), slint::PlatformError> {
                     let _ = child.wait().await;
                     let _ = slint::invoke_from_event_loop(move || {
                         if let Some(ui) = ui_thread.upgrade() {
-                            append_log(&ui, "🛑 任务已取消。");
+                            append_log(&ui, tr!(ui, "🛑 任务已取消。", "🛑 Task cancelled."));
                         }
                     });
                 });
@@ -269,7 +329,7 @@ async fn main() -> Result<(), slint::PlatformError> {
     ui.run()
 }
 
-// --- 辅助函数 ---
+//main log
 fn append_log(ui: &MainWindow, text: &str) {
     let old = ui.get_log_text();
     ui.set_log_text(format!("{}{}\n", old, text).into());
