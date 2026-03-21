@@ -14,7 +14,8 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v4
+    # 1. 升级到 v6，彻底解决 Node 20 弃用警告并增强凭据安全
+    - uses: actions/checkout@v6
 
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -24,32 +25,35 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev
-        sudo apt-get install -y binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
+        # 加上 --no-install-recommends，保持环境纯净，这很 Debian
+        sudo apt-get install -y --no-install-recommends \
+          libxkbcommon-dev libfontconfig1-dev libwayland-dev libx11-dev \
+          binutils-mingw-w64-x86-64 gcc-mingw-w64-x86-64
 
     - name: Get Version from Cargo.toml
       id: get_version
       run: |
-        # 提取 Cargo.toml 中的版本号并存入环境变量
-        VERSION=$(grep '^version =' Cargo.toml | head -n 1 | cut -d '"' -f 2)
+        # 改进提取逻辑，避免被 [dependencies] 下的 version 干扰
+        # 只匹配 [package] 块下的第一个 version
+        VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n 1)
         echo "VERSION=$VERSION" >> $GITHUB_ENV
-        echo "v$VERSION"
+        echo "Building Zdownload version: v$VERSION"
 
     - name: Build Linux Release
       run: |
         cargo build --release
-        # 重命名产物，加上版本和架构标识
         mv target/release/zdownloadwin zdownload-v${{ env.VERSION }}-x86_64-unknown-linux-gnu
 
     - name: Build Windows Release
       run: |
         cargo build --release --target x86_64-pc-windows-gnu
-        # 重命名产物，加上版本和架构标识
         mv target/x86_64-pc-windows-gnu/release/zdownloadwin.exe zdownload-v${{ env.VERSION }}-x86_64-pc-windows-gnu.exe
 
     - name: Create Release and Upload Assets
+      # 保持 v2，这是目前最稳定的发布组件
       uses: softprops/action-gh-release@v2
       with:
+        # 既然是手动触发，建议保留这个 tag_name 逻辑防止冲突
         tag_name: v${{ env.VERSION }}-${{ github.run_number }}
         name: Release v${{ env.VERSION }}
         draft: false
