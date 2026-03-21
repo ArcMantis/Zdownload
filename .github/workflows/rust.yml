@@ -14,7 +14,8 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v4
+    # 升级到 v6：原生支持 Node 24，安全且现代
+    - uses: actions/checkout@v6
 
     - name: Install Rust Toolchain
       uses: dtolnay/rust-toolchain@stable
@@ -48,6 +49,7 @@ jobs:
         mv target/x86_64-pc-windows-gnu/release/zdownloadwin.exe zdownload-v${{ env.VERSION }}-x86_64-pc-windows-gnu.exe
 
     - name: Create Release and Upload Assets
+      # 保持使用主版本号 @v2，静候作者或 GitHub 官方在 6 月份自动完成环境切换
       uses: softprops/action-gh-release@v2
       with:
         tag_name: v${{ env.VERSION }}-${{ github.run_number }}
